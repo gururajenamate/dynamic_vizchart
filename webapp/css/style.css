@@ -1,1 +1,32 @@
 /* Enter your custom styles here */
+/* Enter your custom styles here */
+#main {
+    width: 1200px;
+    height: 450px;
+    margin: auto;
+    margin-top: 50px;
+}
+
+/*  */
+
+.sapMSegB .sapMSegBBtn .sapMSegBBtnInnerWrapper,
+.sapUiSizeCompact .sapMSegBBtn .sapMSegBBtnInner,
+.sapMSegBBtn.sapMSegBtnLastVisibleButton .sapMSegBBtnInner, .sapMSegBBtn.sapMSegBtnLastVisibleButton .sapMSegBBtnInnerWrapper,
+.sapUiSizeCompact .sapMSegBBtn.sapMSegBtnLastVisibleButton .sapMSegBBtnInner {
+    border: 0rem solid #fff !important;
+}
+.sapUiSizeCompact .sapMSegBBtn .sapMSegBBtnInner {
+    padding-left: 1.4375rem !important;
+    padding-right: 1.4375rem !important;
+}
+.sapUiSizeCompact .sapMSegB .sapMSegBBtn {
+    width: 5rem !important;
+}
+.sapMSegB .sapMSegBBtn .sapMSegBBtnInnerWrapper {
+    background-color: transparent !important;
+}
+
+/* Page */
+.sapMPageBgStandard {
+    background-color: #fff !important;
+}

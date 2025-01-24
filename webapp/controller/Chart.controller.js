@@ -1,113 +1,192 @@
 sap.ui.define([
-    "sap/ui/core/mvc/Controller",
-    "sap/ui/model/json/JSONModel"
-], function (Controller, JSONModel) {
-    "use strict";
+	'sap/ui/core/mvc/Controller',
+	'sap/ui/model/json/JSONModel',
+	'sap/m/Label',
+	'sap/ui/model/Filter',
+	'sap/ui/model/FilterOperator',
+	'sap/ui/comp/smartvariants/PersonalizableInfo',
+    "dynamicvizchart/charts/echarts"
+], function(Controller, JSONModel, Label, Filter, FilterOperator, PersonalizableInfo, echart) {
+	"use strict";
 
-    return Controller.extend("dynamicvizchart.controller.Chart", {
-        onInit: function () {
-            // Sample Data
-            var oData = {
-                timeRange: "day", // default view
-                chartData: [
-                    { date: "2025-01-01", value: 30 },
-                    { date: "2025-01-02", value: 40 },
-                    { date: "2025-01-05", value: 50 },
-                    { date: "2025-01-12", value: 60 },
-                    { date: "2025-01-19", value: 70 },
-                    { date: "2025-01-26", value: 80 },
-                    { date: "2025-02-01", value: 90 },
-                    { date: "2025-02-10", value: 100 }
-                ]
-            };
+	return Controller.extend("dynamicvizchart.controller.Chart", {
+		onInit: function() {
+            this.getView().byId("ECHART_HTML").setContent("<div id='main'></div>");
 
-            // Create JSON Model and set it to the view
-            var oModel = new JSONModel(oData);
-            this.getView().setModel(oModel);
+			this.oModel = new JSONModel();
+			this.oModel.loadData(sap.ui.require.toUrl("dynamicvizchart/model/model.json"), null, false);
+			this.getView().setModel(this.oModel);
 
-            // Default data grouping
-            this.groupData("day");
+			this.applyData = this.applyData.bind(this);
+			this.fetchData = this.fetchData.bind(this);
+			this.getFiltersWithValues = this.getFiltersWithValues.bind(this);
+
+			this.oSmartVariantManagement = this.getView().byId("svm");
+			this.oExpandedLabel = this.getView().byId("expandedLabel");
+			this.oSnappedLabel = this.getView().byId("snappedLabel");
+			this.oFilterBar = this.getView().byId("filterbar");
+			this.oTable = this.getView().byId("table");
+
+			this.oFilterBar.registerFetchData(this.fetchData);
+			this.oFilterBar.registerApplyData(this.applyData);
+			this.oFilterBar.registerGetFiltersWithValues(this.getFiltersWithValues);
+
+			var oPersInfo = new PersonalizableInfo({
+				type: "filterBar",
+				keyName: "persistencyKey",
+				dataSource: "",
+				control: this.oFilterBar
+			});
+			this.oSmartVariantManagement.addPersonalizableControl(oPersInfo);
+			this.oSmartVariantManagement.initialise(function () {}, this.oFilterBar);
+		},
+
+        onAfterRendering: function() {
+            this.setEChart();
         },
 
-        onFilterData: function (oEvent) {
-            // Get selected filter type (day, week, month)
-            var sFilterType = oEvent.getSource().getSelectedKey();
-            this.groupData(sFilterType);
-        },
-
-        groupData: function (sFilterType) {
-            var aData = this.getView().getModel().getProperty("/chartData");
-            var aGroupedData = [];
-
-            if (sFilterType === "day") {
-                // Show data as is for daily grouping
-                aGroupedData = aData.map(item => ({
-                    time: item.date,
-                    value: item.value
-                }));
-            } else if (sFilterType === "week") {
-                // Group data into weeks (e.g., W1, W2, etc.)
-                aGroupedData = this.groupByWeeks(aData);
-            } else if (sFilterType === "month") {
-                // Group data into months (e.g., JAN, FEB, etc.)
-                aGroupedData = this.groupByMonths(aData);
+        setEChart: function () {
+            if (this.myChart) {
+                echarts.dispose(this.myChart);
             }
 
-            // Update the model
-            this.getView().getModel().setProperty("/filteredData", aGroupedData);
+            this.byId("ECHART_HTML").setContent("<div id='main'></div>");
+            var chartDom = document.getElementById('main');
+            var myChart = this.myChart = echarts.init(chartDom);
+
+            myChart.setOption(echart.getOption(myChart, []));
+
+            // Enable data zoom when user click bar.
+            const zoomSize = 6;
+            myChart.on('click', function (params) {
+
+
+                // this.showSelectedChartData(params);
+            }.bind(this));
         },
 
-        groupByWeeks: function (aData) {
-            // Define week ranges (W1, W2, etc.)
-            var aWeekRanges = [
-                { week: "W1", start: "2025-01-01", end: "2025-01-07" },
-                { week: "W2", start: "2025-01-08", end: "2025-01-14" },
-                { week: "W3", start: "2025-01-15", end: "2025-01-21" },
-                { week: "W4", start: "2025-01-22", end: "2025-01-31" }
-            ];
+		onExit: function() {
+			this.oModel = null;
+			this.oSmartVariantManagement = null;
+			this.oExpandedLabel = null;
+			this.oSnappedLabel = null;
+			this.oFilterBar = null;
+			this.oTable = null;
+		},
 
-            // Aggregate data by week
-            var aGrouped = [];
-            aWeekRanges.forEach(range => {
-                var iTotalValue = aData
-                    .filter(item => item.date >= range.start && item.date <= range.end)
-                    .reduce((sum, curr) => sum + curr.value, 0);
-                if (iTotalValue > 0) {
-                    aGrouped.push({ time: range.week, value: iTotalValue });
-                }
-            });
-            return aGrouped;
-        },
+		fetchData: function () {
+			var aData = this.oFilterBar.getAllFilterItems().reduce(function (aResult, oFilterItem) {
+				aResult.push({
+					groupName: oFilterItem.getGroupName(),
+					fieldName: oFilterItem.getName(),
+					fieldData: oFilterItem.getControl().getSelectedKeys()
+				});
 
-        groupByMonths: function (aData) {
-            // Aggregate data by months (e.g., JAN, FEB, etc.)
-            var oMonthMapping = {
-                "01": "JAN",
-                "02": "FEB",
-                "03": "MAR",
-                "04": "APR",
-                "05": "MAY",
-                "06": "JUN",
-                "07": "JUL",
-                "08": "AUG",
-                "09": "SEP",
-                "10": "OCT",
-                "11": "NOV",
-                "12": "DEC"
-            };
+				return aResult;
+			}, []);
 
-            var oMonthData = {};
-            aData.forEach(item => {
-                var sMonth = item.date.split("-")[1]; // Extract month
-                var sMonthLabel = oMonthMapping[sMonth];
-                oMonthData[sMonthLabel] = (oMonthData[sMonthLabel] || 0) + item.value;
-            });
+			return aData;
+		},
 
-            // Convert to array
-            return Object.keys(oMonthData).map(month => ({
-                time: month,
-                value: oMonthData[month]
-            }));
-        }
-    });
+		applyData: function (aData) {
+			aData.forEach(function (oDataObject) {
+				var oControl = this.oFilterBar.determineControlByName(oDataObject.fieldName, oDataObject.groupName);
+				oControl.setSelectedKeys(oDataObject.fieldData);
+			}, this);
+		},
+
+		getFiltersWithValues: function () {
+			var aFiltersWithValue = this.oFilterBar.getFilterGroupItems().reduce(function (aResult, oFilterGroupItem) {
+				var oControl = oFilterGroupItem.getControl();
+
+				if (oControl && oControl.getSelectedKeys && oControl.getSelectedKeys().length > 0) {
+					aResult.push(oFilterGroupItem);
+				}
+
+				return aResult;
+			}, []);
+
+			return aFiltersWithValue;
+		},
+
+		onSelectionChange: function (oEvent) {
+			this.oSmartVariantManagement.currentVariantSetModified(true);
+			this.oFilterBar.fireFilterChange(oEvent);
+		},
+
+		onSearch: function () {
+			var aTableFilters = this.oFilterBar.getFilterGroupItems().reduce(function (aResult, oFilterGroupItem) {
+				var oControl = oFilterGroupItem.getControl(),
+					aSelectedKeys = oControl.getSelectedKeys(),
+					aFilters = aSelectedKeys.map(function (sSelectedKey) {
+						return new Filter({
+							path: oFilterGroupItem.getName(),
+							operator: FilterOperator.Contains,
+							value1: sSelectedKey
+						});
+					});
+
+				if (aSelectedKeys.length > 0) {
+					aResult.push(new Filter({
+						filters: aFilters,
+						and: false
+					}));
+				}
+
+				return aResult;
+			}, []);
+
+			this.oTable.getBinding("items").filter(aTableFilters);
+			this.oTable.setShowOverlay(false);
+		},
+
+		onFilterChange: function () {
+			this._updateLabelsAndTable();
+		},
+
+		onAfterVariantLoad: function () {
+			this._updateLabelsAndTable();
+		},
+
+		getFormattedSummaryText: function() {
+			var aFiltersWithValues = this.oFilterBar.retrieveFiltersWithValues();
+
+			if (aFiltersWithValues.length === 0) {
+				return "No filters active";
+			}
+
+			if (aFiltersWithValues.length === 1) {
+				return aFiltersWithValues.length + " filter active: " + aFiltersWithValues.join(", ");
+			}
+
+			return aFiltersWithValues.length + " filters active: " + aFiltersWithValues.join(", ");
+		},
+
+		getFormattedSummaryTextExpanded: function() {
+			var aFiltersWithValues = this.oFilterBar.retrieveFiltersWithValues();
+
+			if (aFiltersWithValues.length === 0) {
+				return "No filters active";
+			}
+
+			var sText = aFiltersWithValues.length + " filters active",
+				aNonVisibleFiltersWithValues = this.oFilterBar.retrieveNonVisibleFiltersWithValues();
+
+			if (aFiltersWithValues.length === 1) {
+				sText = aFiltersWithValues.length + " filter active";
+			}
+
+			if (aNonVisibleFiltersWithValues && aNonVisibleFiltersWithValues.length > 0) {
+				sText += " (" + aNonVisibleFiltersWithValues.length + " hidden)";
+			}
+
+			return sText;
+		},
+
+		_updateLabelsAndTable: function () {
+			this.oExpandedLabel.setText(this.getFormattedSummaryTextExpanded());
+			this.oSnappedLabel.setText(this.getFormattedSummaryText());
+			this.oTable.setShowOverlay(true);
+		}
+	});
 });
